@@ -45,27 +45,27 @@ func NewACL(filePath string, userStore *UserStore) (*ACL, error) {
 			// Default ACL entries (role-based)
 			entries = []ACLEntry{
 				{
-					Match: ACLMatch{Role: "admin"},
+					Match:   ACLMatch{Role: "admin"},
 					Actions: []string{"*"},
 					Comment: "Admins have full access",
 				},
 				{
-					Match: ACLMatch{Role: "developer", Type: "registry", Name: "catalog"},
+					Match:   ACLMatch{Role: "developer", Type: "registry", Name: "catalog"},
 					Actions: []string{"*"},
 					Comment: "Developers can list repositories (catalog requires wildcard)",
 				},
 				{
-					Match: ACLMatch{Role: "developer"},
+					Match:   ACLMatch{Role: "developer"},
 					Actions: []string{"push", "pull"},
 					Comment: "Developers can push and pull repositories",
 				},
 				{
-					Match: ACLMatch{Role: "readonly", Type: "registry", Name: "catalog"},
+					Match:   ACLMatch{Role: "readonly", Type: "registry", Name: "catalog"},
 					Actions: []string{"*"},
 					Comment: "Read-only users can list repositories",
 				},
 				{
-					Match: ACLMatch{Role: "readonly"},
+					Match:   ACLMatch{Role: "readonly"},
 					Actions: []string{"pull"},
 					Comment: "Read-only users can only pull repositories",
 				},
