@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"aithen/auth"
 	"aithen/registry"
@@ -25,8 +26,37 @@ func (h *Handler) getRegistryClient(c *gin.Context) *registry.Client {
 		log.Println("[DEBUG] No username in session, creating anonymous client")
 	}
 
-	if username != nil && password != nil {
-		return registry.NewClient(h.Config.RegistryURL, username.(string), password.(string))
+	if username != nil {
+		usernameStr := username.(string)
+
+		// If we have a password in session, use it
+		if password != nil {
+			passwordStr := password.(string)
+
+			// Check if it's a session token and verify it's still valid
+			if !h.UserStore.Authenticate(usernameStr, passwordStr) {
+				log.Printf("[DEBUG] Session credentials invalid for user: %s, generating new session token", usernameStr)
+				// Session token might have expired or been invalidated, generate a new one
+				sessionToken, err := h.generateSessionToken(usernameStr)
+				if err == nil {
+					// Update session with new token
+					session.Set("password", sessionToken)
+					session.Save()
+					passwordStr = sessionToken
+				}
+			}
+
+			return registry.NewClient(h.Config.RegistryURL, usernameStr, passwordStr)
+		}
+
+		// No password in session, this shouldn't happen but generate one
+		log.Printf("[DEBUG] No password in session for user: %s, generating session token", usernameStr)
+		sessionToken, err := h.generateSessionToken(usernameStr)
+		if err == nil {
+			session.Set("password", sessionToken)
+			session.Save()
+			return registry.NewClient(h.Config.RegistryURL, usernameStr, sessionToken)
+		}
 	}
 
 	// If no credentials in session, use empty credentials
@@ -173,22 +203,39 @@ func (h *Handler) DeleteImage(c *gin.Context) {
 	tag := c.Param("tag")
 	registryClient := h.getRegistryClient(c)
 
+	log.Printf("[DEBUG] DeleteImage called for %s:%s", repo, tag)
+
 	// First get the digest for this tag
 	_, digest, err := registryClient.GetManifest(repo, tag)
 	if err != nil {
+		log.Printf("[ERROR] Failed to get manifest for %s:%s - %v", repo, tag, err)
+
+		// Check if it's a 404 error - manifest might already be deleted
+		if strings.Contains(err.Error(), "404") && strings.Contains(err.Error(), "MANIFEST_UNKNOWN") {
+			c.HTML(http.StatusOK, "error.html", gin.H{
+				"error": fmt.Sprintf("Image %s:%s appears to be already deleted or corrupted. The tag reference exists but the manifest is missing. Please run garbage collection to clean up orphaned references.", repo, tag),
+			})
+			return
+		}
+
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to fetch image digest: %v", err),
 		})
 		return
 	}
 
+	log.Printf("[DEBUG] Got digest for %s:%s - %s", repo, tag, digest)
+
 	// Delete using the digest
 	if err := registryClient.DeleteImage(repo, digest); err != nil {
+		log.Printf("[ERROR] Failed to delete image %s with digest %s - %v", repo, digest, err)
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to delete image: %v", err),
 		})
 		return
 	}
+
+	log.Printf("[DEBUG] Successfully deleted %s:%s (digest: %s)", repo, tag, digest)
 
 	// Return success message for HTMX
 	c.HTML(http.StatusOK, "delete_success.html", gin.H{
@@ -218,6 +265,8 @@ func (h *Handler) DeleteRepository(c *gin.Context) {
 	}
 
 	// Delete each tag
+	// Track which digests we've already deleted to avoid duplicate deletion attempts
+	deletedDigests := make(map[string]bool)
 	deletedCount := 0
 	errors := []string{}
 
@@ -229,12 +278,21 @@ func (h *Handler) DeleteRepository(c *gin.Context) {
 			continue
 		}
 
+		// Check if we've already deleted this digest
+		if deletedDigests[digest] {
+			log.Printf("[DEBUG] Skipping %s:%s - digest %s already deleted", repo, tag, digest)
+			deletedCount++ // Count as successful since the manifest is gone
+			continue
+		}
+
 		// Delete using the digest
 		if err := registryClient.DeleteImage(repo, digest); err != nil {
 			errors = append(errors, fmt.Sprintf("Failed to delete %s:%s - %v", repo, tag, err))
 			continue
 		}
 
+		// Mark this digest as deleted
+		deletedDigests[digest] = true
 		deletedCount++
 	}
 

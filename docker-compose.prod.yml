@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  registry:
+    environment:
+      - REGISTRY_AUTH_TOKEN_REALM=https://hub.ved.yt/auth
+      # Override other settings as needed for production
+
+  aithen:
+    environment:
+      # Add production-specific environment variables
+      - WEBAUTHN_RP_ID=hub.ved.yt
+      - WEBAUTHN_ORIGIN=https://hub.ved.yt

@@ -236,9 +236,12 @@ func (c *Client) GetManifest(repository, tag string) (*Manifest, string, error) 
 	path := fmt.Sprintf("/v2/%s/manifests/%s", repository, tag)
 	scope := fmt.Sprintf("repository:%s:pull", repository)
 
-	// Accept both OCI and Docker v2 manifest formats
-	// Registry v3 uses OCI format by default
-	acceptHeader := "application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.docker.distribution.manifest.list.v2+json"
+	// CRITICAL: Request the specific manifest media type to get the correct digest
+	// Per Docker Distribution docs: "For registry versions 2.3+, use Accept: application/vnd.docker.distribution.manifest.v2+json
+	// when HEAD or GETting the manifest to obtain the correct digest."
+	// We must request the manifest in the format it's stored to get the matching digest
+	acceptHeader := "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json"
+
 	resp, err := c.doRequestWithScope("GET", path, acceptHeader, scope)
 	if err != nil {
 		return nil, "", err
@@ -250,15 +253,37 @@ func (c *Client) GetManifest(repository, tag string) (*Manifest, string, error) 
 		return nil, "", fmt.Errorf("registry API error: %d - %s", resp.StatusCode, string(body))
 	}
 
-	// Get the digest from the header
+	// Get the digest from the Docker-Content-Digest header
+	// This is the canonical digest that the registry uses internally
 	digest := resp.Header.Get("Docker-Content-Digest")
 
-	var manifest Manifest
+	// Read the body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
 	}
 
+	// If digest is still empty, it means the registry didn't return it
+	// This shouldn't happen with modern registries, but we can fall back to HEAD request
+	if digest == "" {
+		fmt.Printf("[REGISTRY] Warning: No Docker-Content-Digest header found for %s:%s\n", repository, tag)
+		fmt.Printf("[REGISTRY] Content-Type: %s\n", resp.Header.Get("Content-Type"))
+
+		// Try a HEAD request which should always include the digest
+		headResp, err := c.doRequestWithScope("HEAD", path, acceptHeader, scope)
+		if err == nil {
+			digest = headResp.Header.Get("Docker-Content-Digest")
+			headResp.Body.Close()
+			fmt.Printf("[REGISTRY] Got digest from HEAD request: %s\n", digest)
+		}
+
+		// If still no digest, we have a problem
+		if digest == "" {
+			return nil, "", fmt.Errorf("registry did not return Docker-Content-Digest header")
+		}
+	}
+
+	var manifest Manifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
 		return nil, "", err
 	}

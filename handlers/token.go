@@ -49,17 +49,47 @@ func (h *Handler) RegistryAuth(c *gin.Context) {
 		return
 	}
 
-	// Authenticate the user
-	if !h.UserStore.Authenticate(username, password) {
-		log.Printf("[TOKEN] Authentication failed for user: %s", username)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid credentials",
-		})
-		return
+	// Check if password is a personal access token (starts with "pat_")
+	var token string
+	var err error
+
+	if strings.HasPrefix(password, "pat_") {
+		personalToken, ptErr := h.TokenStore.GetToken(password)
+		if ptErr != nil || personalToken.Username != username {
+			log.Printf("[TOKEN] Personal token authentication failed for user: %s", username)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid credentials",
+			})
+			return
+		}
+
+		// Use the token's username and permissions
+		username = personalToken.Username
+		log.Printf("[TOKEN] Personal token authenticated for user: %s with permissions: %v, repos: %v",
+			username, personalToken.Permissions, personalToken.Repositories)
+
+		// Generate token with personal token's limited permissions
+		token, err = h.TokenService.GenerateTokenWithPermissions(
+			username,
+			service,
+			scopes,
+			personalToken.Permissions,
+			personalToken.Repositories,
+		)
+	} else {
+		// Authenticate with regular password
+		if !h.UserStore.Authenticate(username, password) {
+			log.Printf("[TOKEN] Authentication failed for user: %s", username)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid credentials",
+			})
+			return
+		}
+
+		// Generate token with user's full permissions from ACL
+		token, err = h.TokenService.GenerateToken(username, service, scopes)
 	}
 
-	// Generate token with user's permissions
-	token, err := h.TokenService.GenerateToken(username, service, scopes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to generate token",

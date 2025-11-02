@@ -162,7 +162,7 @@ func (s *WebAuthnService) FinishDiscoverableLogin(userStore *UserStore, response
 	// Create a handler that looks up the user by credential ID and user handle
 	userHandler := func(rawID, userHandle []byte) (webauthn.User, error) {
 		// Try looking up by user handle (username) first
-		if userHandle != nil && len(userHandle) > 0 {
+		if len(userHandle) > 0 {
 			username := string(userHandle)
 			user, err := userStore.GetUser(username)
 			if err == nil {
@@ -186,7 +186,7 @@ func (s *WebAuthnService) FinishDiscoverableLogin(userStore *UserStore, response
 
 	// Look up the user again to return it (ValidateDiscoverableLogin only returns credential)
 	var user *User
-	if response.Response.UserHandle != nil && len(response.Response.UserHandle) > 0 {
+	if len(response.Response.UserHandle) > 0 {
 		username := string(response.Response.UserHandle)
 		user, _ = userStore.GetUser(username)
 	}

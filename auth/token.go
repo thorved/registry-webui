@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -301,6 +302,133 @@ func (ts *TokenService) GenerateToken(username, service string, scopes []string)
 	}
 
 	return tokenString, nil
+}
+
+// GenerateTokenWithPermissions generates a JWT token with specific permissions
+// This is used for personal access tokens that have limited permissions
+func (ts *TokenService) GenerateTokenWithPermissions(username, service string, scopes []string, allowedPermissions []string, allowedRepos []string) (string, error) {
+	now := time.Now()
+
+	// Parse scopes and build access entries
+	accessEntries := make([]AccessEntry, 0)
+
+	for _, scope := range scopes {
+		// Scope format: "repository:repo-name:pull,push"
+		parts := splitScope(scope)
+		if len(parts) != 3 {
+			continue
+		}
+
+		resourceType := parts[0]
+		resourceName := parts[1]
+		requestedActions := splitActions(parts[2])
+
+		// Check if this repository is allowed by the personal token
+		repoAllowed := false
+		for _, pattern := range allowedRepos {
+			if pattern == "*" || matchRepoPattern(pattern, resourceName) {
+				repoAllowed = true
+				break
+			}
+		}
+
+		if !repoAllowed {
+			log.Printf("[TOKEN-PAT] Repository %s not allowed by personal token", resourceName)
+			continue
+		}
+
+		// Filter requested actions based on personal token permissions
+		grantedActions := make([]string, 0)
+
+		// Check if wildcard permission is in the token
+		hasWildcard := false
+		for _, allowed := range allowedPermissions {
+			if allowed == "*" {
+				hasWildcard = true
+				break
+			}
+		}
+
+		if hasWildcard {
+			// Token has wildcard permission - grant all requested actions
+			grantedActions = requestedActions
+			log.Printf("[TOKEN-PAT] User=%s, Type=%s, Name=%s, Wildcard granted: %v", username, resourceType, resourceName, grantedActions)
+		} else {
+			// Filter based on specific allowed actions from the personal token
+			for _, action := range requestedActions {
+				// Handle wildcard request
+				if action == "*" {
+					// Grant all permissions the token has
+					grantedActions = allowedPermissions
+					break
+				}
+
+				for _, allowed := range allowedPermissions {
+					if action == allowed {
+						grantedActions = append(grantedActions, action)
+						break
+					}
+				}
+			}
+			log.Printf("[TOKEN-PAT] User=%s, Type=%s, Name=%s, Requested=%v, Granted=%v", username, resourceType, resourceName, requestedActions, grantedActions)
+		}
+
+		// Only add entry if there are granted actions
+		if len(grantedActions) > 0 {
+			accessEntries = append(accessEntries, AccessEntry{
+				Type:    resourceType,
+				Name:    resourceName,
+				Actions: grantedActions,
+			})
+		}
+	}
+
+	// Create JWT claims
+	claims := TokenClaims{
+		Access: accessEntries,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    ts.issuer,
+			Subject:   username,
+			Audience:  jwt.ClaimStrings{service},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ts.expiration)),
+		},
+	}
+
+	// Create and sign token with kid header
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+
+	// Add kid header to match JWKS
+	token.Header["kid"] = ts.issuer
+
+	tokenString, err := token.SignedString(ts.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign token: %v", err)
+	}
+
+	return tokenString, nil
+}
+
+// matchRepoPattern checks if a repository name matches a pattern
+// Supports wildcards: "myapp/*" matches "myapp/frontend", "myapp/backend", etc.
+func matchRepoPattern(pattern, repoName string) bool {
+	if pattern == repoName {
+		return true
+	}
+
+	// Handle wildcard patterns
+	if strings.HasSuffix(pattern, "/*") {
+		prefix := strings.TrimSuffix(pattern, "/*")
+		return strings.HasPrefix(repoName, prefix+"/")
+	}
+
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(repoName, prefix)
+	}
+
+	return false
 }
 
 // GetPublicKey returns the public key in PEM format
