@@ -93,6 +93,12 @@ func NewTokenService(privateKeyPath, issuer string, expiration time.Duration, ac
 			Bytes: privateKeyBytes,
 		})
 
+		// Ensure directory for private key exists
+		keyDir := filepath.Dir(privateKeyPath)
+		if err := os.MkdirAll(keyDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for private key: %v", err)
+		}
+
 		if err := os.WriteFile(privateKeyPath, privateKeyPEM, 0600); err != nil {
 			return nil, fmt.Errorf("failed to save private key: %v", err)
 		}

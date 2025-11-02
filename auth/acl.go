@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -32,13 +33,60 @@ type ACL struct {
 // NewACL creates a new ACL from a file
 func NewACL(filePath string, userStore *UserStore) (*ACL, error) {
 	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ACL file: %v", err)
-	}
-
 	var entries []ACLEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, fmt.Errorf("failed to parse ACL file: %v", err)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Create parent directory if needed
+			dir := filepath.Dir(filePath)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create acl directory: %v", err)
+			}
+
+			// Default ACL entries (role-based)
+			entries = []ACLEntry{
+				{
+					Match: ACLMatch{Role: "admin"},
+					Actions: []string{"*"},
+					Comment: "Admins have full access",
+				},
+				{
+					Match: ACLMatch{Role: "developer", Type: "registry", Name: "catalog"},
+					Actions: []string{"*"},
+					Comment: "Developers can list repositories (catalog requires wildcard)",
+				},
+				{
+					Match: ACLMatch{Role: "developer"},
+					Actions: []string{"push", "pull"},
+					Comment: "Developers can push and pull repositories",
+				},
+				{
+					Match: ACLMatch{Role: "readonly", Type: "registry", Name: "catalog"},
+					Actions: []string{"*"},
+					Comment: "Read-only users can list repositories",
+				},
+				{
+					Match: ACLMatch{Role: "readonly"},
+					Actions: []string{"pull"},
+					Comment: "Read-only users can only pull repositories",
+				},
+			}
+
+			// Persist default ACL to file
+			out, jerr := json.MarshalIndent(entries, "", "  ")
+			if jerr != nil {
+				return nil, fmt.Errorf("failed to marshal default ACL: %v", jerr)
+			}
+			if werr := os.WriteFile(filePath, out, 0644); werr != nil {
+				return nil, fmt.Errorf("failed to write default ACL file: %v", werr)
+			}
+			fmt.Printf("✓ Created default ACL at %s\n", filePath)
+		} else {
+			return nil, fmt.Errorf("failed to read ACL file: %v", err)
+		}
+	} else {
+		if jerr := json.Unmarshal(data, &entries); jerr != nil {
+			return nil, fmt.Errorf("failed to parse ACL file: %v", jerr)
+		}
 	}
 
 	return &ACL{
