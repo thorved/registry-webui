@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/base64"
+	"log"
 	"net/http"
 	"strings"
 
@@ -48,9 +49,9 @@ func (h *Handler) RegistryAuth(c *gin.Context) {
 		return
 	}
 
-	// Authenticate user
-	if !h.Auth.Authenticate(username, password) {
-		c.Header("WWW-Authenticate", `Basic realm="Registry Realm"`)
+	// Authenticate the user
+	if !h.UserStore.Authenticate(username, password) {
+		log.Printf("[TOKEN] Authentication failed for user: %s", username)
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "Invalid credentials",
 		})

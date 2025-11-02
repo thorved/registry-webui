@@ -17,18 +17,20 @@ type ACLEntry struct {
 
 // ACLMatch defines the matching criteria for an ACL entry
 type ACLMatch struct {
-	Account string `json:"account,omitempty"` // Username or regex pattern
-	Type    string `json:"type,omitempty"`    // Resource type (e.g., "repository")
+	Account string `json:"account,omitempty"` // Username or regex pattern (deprecated, use Role)
+	Role    string `json:"role,omitempty"`    // User role (admin, developer, readonly, custom)
+	Type    string `json:"type,omitempty"`    // Resource type (e.g., "repository", "registry")
 	Name    string `json:"name,omitempty"`    // Repository name or pattern
 }
 
 // ACL manages access control lists
 type ACL struct {
-	Entries []ACLEntry
+	Entries   []ACLEntry
+	UserStore *UserStore // Reference to user store for role lookup
 }
 
 // NewACL creates a new ACL from a file
-func NewACL(filePath string) (*ACL, error) {
+func NewACL(filePath string, userStore *UserStore) (*ACL, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ACL file: %v", err)
@@ -39,21 +41,38 @@ func NewACL(filePath string) (*ACL, error) {
 		return nil, fmt.Errorf("failed to parse ACL file: %v", err)
 	}
 
-	return &ACL{Entries: entries}, nil
+	return &ACL{
+		Entries:   entries,
+		UserStore: userStore,
+	}, nil
 }
 
 // GetPermissions returns the allowed actions for a user on a resource
-// Uses first-match-wins strategy: if an exact account match is found, only that rule applies
+// Checks both role-based and account-based rules
 func (a *ACL) GetPermissions(username, resourceType, resourceName string) []string {
 	var allowedActions []string
 	actionsMap := make(map[string]bool)
 	exactMatchFound := false
 
-	// First pass: look for exact account matches (not regex)
+	// Get user's role if user store is available
+	var userRole string
+	if a.UserStore != nil {
+		userRole = a.UserStore.GetUserRole(username)
+	}
+
+	// First pass: look for role-based or exact account matches (not regex)
 	for _, entry := range a.Entries {
-		if entry.Match.Account != "" && !isRegexPattern(entry.Match.Account) {
+		// Check role-based match first (preferred)
+		if entry.Match.Role != "" && userRole != "" && entry.Match.Role == userRole {
+			if a.matchesEntry(entry, username, userRole, resourceType, resourceName) {
+				exactMatchFound = true
+				for _, action := range entry.Actions {
+					actionsMap[action] = true
+				}
+			}
+		} else if entry.Match.Account != "" && !isRegexPattern(entry.Match.Account) {
 			if entry.Match.Account == username {
-				if a.matchesEntry(entry, username, resourceType, resourceName) {
+				if a.matchesEntry(entry, username, userRole, resourceType, resourceName) {
 					exactMatchFound = true
 					for _, action := range entry.Actions {
 						actionsMap[action] = true
@@ -68,7 +87,7 @@ func (a *ACL) GetPermissions(username, resourceType, resourceName string) []stri
 	// If no exact match, apply all matching regex/wildcard rules
 	if !exactMatchFound {
 		for _, entry := range a.Entries {
-			if a.matchesEntry(entry, username, resourceType, resourceName) {
+			if a.matchesEntry(entry, username, userRole, resourceType, resourceName) {
 				for _, action := range entry.Actions {
 					actionsMap[action] = true
 				}
@@ -89,8 +108,15 @@ func isRegexPattern(pattern string) bool {
 }
 
 // matchesEntry checks if an entry matches the given criteria
-func (a *ACL) matchesEntry(entry ACLEntry, username, resourceType, resourceName string) bool {
-	// Check account match
+func (a *ACL) matchesEntry(entry ACLEntry, username, userRole, resourceType, resourceName string) bool {
+	// Check role match (preferred over account match)
+	if entry.Match.Role != "" {
+		if userRole == "" || entry.Match.Role != userRole {
+			return false
+		}
+	}
+
+	// Check account match (for backward compatibility)
 	if entry.Match.Account != "" {
 		if !a.matchPattern(entry.Match.Account, username) {
 			return false
@@ -180,4 +206,56 @@ func (a *ACL) CanPush(username, repo string) bool {
 		}
 	}
 	return false
+}
+
+// LoadACL is an alias for NewACL for backwards compatibility
+func LoadACL(filePath string, userStore *UserStore) (*ACL, error) {
+	return NewACL(filePath, userStore)
+}
+
+// EnsureAdminExists checks if the admin user exists in ACL, and adds it if missing
+func EnsureAdminExists(aclPath, username string) error {
+	// Read ACL file
+	data, err := os.ReadFile(aclPath)
+	if err != nil {
+		return fmt.Errorf("failed to read ACL file: %v", err)
+	}
+
+	var entries []ACLEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("failed to parse ACL file: %v", err)
+	}
+
+	// Check if admin user already exists
+	for _, entry := range entries {
+		if entry.Match.Account == username {
+			// Admin already exists in ACL
+			return nil
+		}
+	}
+
+	// Admin doesn't exist, add it as the first entry
+	adminEntry := ACLEntry{
+		Match: ACLMatch{
+			Account: username,
+		},
+		Actions: []string{"*"},
+		Comment: fmt.Sprintf("Admin user %s - full access (auto-created)", username),
+	}
+
+	// Prepend admin entry to the beginning
+	entries = append([]ACLEntry{adminEntry}, entries...)
+
+	// Save back to file
+	newData, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal ACL: %v", err)
+	}
+
+	if err := os.WriteFile(aclPath, newData, 0644); err != nil {
+		return fmt.Errorf("failed to write ACL file: %v", err)
+	}
+
+	fmt.Printf("✓ Added default admin user '%s' to ACL with full permissions\n", username)
+	return nil
 }

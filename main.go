@@ -20,14 +20,15 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 
-	// Initialize htpasswd authentication
-	htpasswdAuth, err := auth.NewHtpasswdAuth(cfg.HtpasswdPath)
+	// Initialize user store (replaces htpasswd)
+	userStore, err := auth.NewUserStore("/auth/users.json")
 	if err != nil {
-		log.Fatalf("Failed to initialize htpasswd auth: %v", err)
+		log.Fatalf("Failed to initialize user store: %v", err)
 	}
+	log.Println("User store initialized successfully")
 
-	// Initialize ACL
-	acl, err := auth.NewACL(cfg.ACLPath)
+	// Initialize ACL with user store reference
+	acl, err := auth.NewACL(cfg.ACLPath, userStore)
 	if err != nil {
 		log.Fatalf("Failed to initialize ACL: %v", err)
 	}
@@ -80,7 +81,7 @@ func main() {
 	r.LoadHTMLGlob("templates/*.html")
 
 	// Initialize handlers
-	h := handlers.NewHandler(cfg, htpasswdAuth, registryClient, tokenService, tokenStore)
+	h := handlers.NewHandler(cfg, userStore, registryClient, tokenService, tokenStore)
 
 	// Docker Registry token authentication endpoint (public)
 	r.GET("/auth", h.RegistryAuth)

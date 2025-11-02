@@ -76,8 +76,27 @@ func (h *Handler) ListRepositories(c *gin.Context) {
 	}
 	log.Printf("[DEBUG] Filtered repos count: %d, repos: %v", len(filteredRepos), filteredRepos)
 
+	// Get user role for permission checks
+	username, exists := c.Get("username")
+	log.Printf("[DEBUG] Username from context: %v, exists: %v", username, exists)
+	userRole := "readonly" // default
+	if username != nil {
+		usernameStr := username.(string)
+		log.Printf("[DEBUG] Looking up user: %s", usernameStr)
+		if user, err := h.UserStore.GetUser(usernameStr); err == nil {
+			userRole = user.Role
+			log.Printf("[DEBUG] User found: %s, Role: %s", usernameStr, userRole)
+		} else {
+			log.Printf("[DEBUG] User lookup failed: %v", err)
+		}
+	} else {
+		log.Printf("[DEBUG] Username is nil, using default role: %s", userRole)
+	}
+
+	log.Printf("[DEBUG] Rendering repositories.html with userRole: %s", userRole)
 	c.HTML(http.StatusOK, "repositories.html", gin.H{
 		"repositories": filteredRepos,
+		"userRole":     userRole,
 	})
 }
 
@@ -94,9 +113,28 @@ func (h *Handler) ShowRepository(c *gin.Context) {
 		return
 	}
 
+	// Get user role for permission checks
+	username, exists := c.Get("username")
+	log.Printf("[DEBUG] ShowRepository - Username from context: %v, exists: %v", username, exists)
+	userRole := "readonly" // default
+	if username != nil {
+		usernameStr := username.(string)
+		log.Printf("[DEBUG] ShowRepository - Looking up user: %s", usernameStr)
+		if user, err := h.UserStore.GetUser(usernameStr); err == nil {
+			userRole = user.Role
+			log.Printf("[DEBUG] ShowRepository - User found: %s, Role: %s", usernameStr, userRole)
+		} else {
+			log.Printf("[DEBUG] ShowRepository - User lookup failed: %v", err)
+		}
+	} else {
+		log.Printf("[DEBUG] ShowRepository - Username is nil, using default role: %s", userRole)
+	}
+
+	log.Printf("[DEBUG] Rendering repository_detail.html with userRole: %s", userRole)
 	c.HTML(http.StatusOK, "repository_detail.html", gin.H{
 		"repository": repo,
 		"tags":       tags,
+		"userRole":   userRole,
 	})
 }
 

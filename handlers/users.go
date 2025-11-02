@@ -12,18 +12,38 @@ import (
 func (h *Handler) UsersPage(c *gin.Context) {
 	session := sessions.Default(c)
 	username := session.Get(auth.SessionUserKey)
-	users := h.Auth.ListUsers()
+
+	// Get all users with their roles directly from UserStore
+	usersWithDetails := h.UserStore.ListUsersWithDetails()
+	type userInfo struct {
+		Username string
+		Role     string
+	}
+	var infos []userInfo
+	for _, u := range usersWithDetails {
+		infos = append(infos, userInfo{
+			Username: u.Username,
+			Role:     u.Role,
+		})
+	}
+
+	// Determine current user's role for template (used to show/hide actions)
+	currentRole := "readonly"
+	if username != nil {
+		currentRole = h.UserStore.GetUserRole(username.(string))
+	}
 
 	c.HTML(http.StatusOK, "users.html", gin.H{
-		"title":    "User Management",
-		"username": username,
-		"users":    users,
+		"title":       "User Management",
+		"username":    username,
+		"users":       infos,
+		"currentRole": currentRole,
 	})
 }
 
 // ListUsers returns all users as JSON
 func (h *Handler) ListUsers(c *gin.Context) {
-	users := h.Auth.ListUsers()
+	users := h.UserStore.ListUsers()
 	c.JSON(http.StatusOK, gin.H{
 		"users": users,
 	})
@@ -67,54 +87,55 @@ func (h *Handler) AddUser(c *gin.Context) {
 		return
 	}
 
-	// Add user to htpasswd
-	if err := h.Auth.AddUser(req.Username, req.Password); err != nil {
+	// Only allow creating users if current session user is admin
+	session := sessions.Default(c)
+	current := session.Get(auth.SessionUserKey)
+	if current == nil || (h.TokenService == nil || !h.TokenService.IsAdmin(current.(string))) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only admin users can create new users"})
+		return
+	}
+
+	// Add user to user store with role
+	if err := h.UserStore.AddUser(req.Username, req.Password, req.Role, req.Email, req.FullName); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	// Add ACL entry based on role
-	if req.Role != "" {
-		if err := h.addUserACL(req.Username, req.Role, req.CustomPermissions); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "User created but failed to set permissions: " + err.Error(),
-			})
-			return
-		}
-	}
-
+	// Note: No need to update ACL anymore - it's role-based
 	c.JSON(http.StatusOK, gin.H{
 		"message": "User created successfully with role: " + req.Role,
 	})
 }
 
-// addUserACL adds ACL entry for the user based on role
-func (h *Handler) addUserACL(username, role string, customPerms *struct {
-	Actions      []string `json:"actions"`
-	Repositories []string `json:"repositories"`
-}) error {
-	// TODO: Implement ACL file update functionality
-	// This would require:
-	// 1. Load existing ACL from file
-	// 2. Add new entry based on role
-	// 3. Save back to file
-	// 4. Reload ACL in memory
-
-	// For now, users need to be manually added to acl.json
-	// or ACL entries can be added through the configuration file
-
-	_ = username // Mark as intentionally unused for now
-	_ = role
-	_ = customPerms
-
-	return nil
-}
-
 // UpdatePassword updates a user's password
 func (h *Handler) UpdatePassword(c *gin.Context) {
 	username := c.Param("username")
+
+	// Get current session user
+	session := sessions.Default(c)
+	currentUser := session.Get(auth.SessionUserKey)
+
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Not authenticated",
+		})
+		return
+	}
+
+	currentUsername := currentUser.(string)
+
+	// Check if user is trying to change their own password or is an admin
+	isAdmin := h.TokenService != nil && h.TokenService.IsAdmin(currentUsername)
+	isSelf := currentUsername == username
+
+	if !isSelf && !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "You can only change your own password. Admin privileges required to change other users' passwords.",
+		})
+		return
+	}
 
 	var req struct {
 		Password string `json:"password" binding:"required"`
@@ -135,7 +156,7 @@ func (h *Handler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.Auth.UpdatePassword(username, req.Password); err != nil {
+	if err := h.UserStore.UpdatePassword(username, req.Password); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -153,15 +174,32 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 	session := sessions.Default(c)
 	currentUser := session.Get(auth.SessionUserKey)
 
+	if currentUser == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Not authenticated",
+		})
+		return
+	}
+
+	currentUsername := currentUser.(string)
+
+	// Only admins can delete users
+	if h.TokenService == nil || !h.TokenService.IsAdmin(currentUsername) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Admin privileges required to delete users",
+		})
+		return
+	}
+
 	// Prevent deleting yourself
-	if username == currentUser {
+	if username == currentUsername {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Cannot delete your own account",
 		})
 		return
 	}
 
-	if err := h.Auth.DeleteUser(username); err != nil {
+	if err := h.UserStore.DeleteUser(username); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})

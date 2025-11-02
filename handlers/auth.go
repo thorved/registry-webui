@@ -37,8 +37,8 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	// Authenticate against htpasswd
-	if !h.Auth.Authenticate(username, password) {
+	// Authenticate against user store
+	if !h.UserStore.Authenticate(username, password) {
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
 			"title": "Login - Registry Web UI",
 			"error": "Invalid username or password",

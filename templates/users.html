@@ -229,6 +229,7 @@
             <!-- Header -->
             <div class="mb-6 flex justify-between items-center">
                 <h2 class="text-2xl font-bold text-gray-900">User Management</h2>
+                {{ if eq .currentRole "admin" }}
                 <button onclick="showModal('addUserModal')"
                         class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
                     <svg class="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -236,6 +237,7 @@
                     </svg>
                     Add User
                 </button>
+                {{ end }}
             </div>
 
             <!-- Users Table -->
@@ -264,19 +266,27 @@
                                         </div>
                                     </div>
                                     <div class="ml-4">
-                                        <div class="text-sm font-medium text-gray-900">{{ . }}</div>
+                                        <div class="text-sm font-medium text-gray-900">{{ .Username }}</div>
+                                        <div class="text-xs text-gray-500">Role: <span class="font-medium">{{ .Role }}</span></div>
                                     </div>
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button onclick="openChangePasswordModal('{{ . }}')"
+                                {{ if eq $.currentRole "admin" }}
+                                <button onclick="openChangePasswordModal('{{ .Username }}')"
                                         class="text-blue-600 hover:text-blue-900 mr-4">
                                     Change Password
                                 </button>
-                                <button onclick="deleteUser('{{ . }}')"
+                                <button onclick="deleteUser('{{ .Username }}')"
                                         class="text-red-600 hover:text-red-900">
                                     Delete
                                 </button>
+                                {{ else if eq $.username .Username }}
+                                <button onclick="openChangePasswordModal('{{ .Username }}')"
+                                        class="text-blue-600 hover:text-blue-900">
+                                    Change My Password
+                                </button>
+                                {{ end }}
                             </td>
                         </tr>
                         {{ end }}

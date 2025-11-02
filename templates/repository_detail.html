@@ -20,6 +20,7 @@
                     View Details
                 </button>
             </div>
+            {{ if eq $.userRole "admin" }}
             <button 
                 hx-delete="/api/repository/{{ $.repository }}/tag/{{ . }}"
                 hx-confirm="Are you sure you want to delete {{ $.repository }}:{{ . }}?"
@@ -31,6 +32,7 @@
                 </svg>
                 Delete
             </button>
+            {{ end }}
         </div>
         {{ end }}
     </div>

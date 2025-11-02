@@ -230,10 +230,25 @@ func (ts *TokenService) GenerateToken(username, service string, scopes []string)
 			}
 		}
 
+		// Check if wildcard is requested
+		requestsWildcard := false
+		for _, action := range requestedActions {
+			if action == "*" {
+				requestsWildcard = true
+				break
+			}
+		}
+
 		if hasWildcard {
-			// Grant all requested actions
+			// User has wildcard permission - grant all requested actions
 			grantedActions = requestedActions
 			log.Printf("[TOKEN] Wildcard permission granted, granting all: %v", grantedActions)
+		} else if requestsWildcard {
+			// Request wants wildcard but user doesn't have it
+			// Grant the user's actual allowed actions (not the wildcard)
+			// The registry will accept the token if it has at least one valid action
+			grantedActions = allowedActions
+			log.Printf("[TOKEN] Wildcard requested, user doesn't have wildcard, granting user's actual permissions: %v", grantedActions)
 		} else {
 			// Filter based on specific allowed actions
 			for _, action := range requestedActions {
@@ -403,4 +418,56 @@ func (ts *TokenService) SaveJWKS(path string) error {
 	}
 
 	return nil
+}
+
+// CanPush checks if a user can push to a given repository via the ACL
+func (ts *TokenService) CanPush(username, repo string) bool {
+	if ts.acl == nil {
+		return false
+	}
+	return ts.acl.CanPush(username, repo)
+}
+
+// CanPull checks if a user can pull from a given repository via the ACL
+func (ts *TokenService) CanPull(username, repo string) bool {
+	if ts.acl == nil {
+		return false
+	}
+	return ts.acl.CanPull(username, repo)
+}
+
+// IsAdmin returns true when the user has wildcard/admin permissions
+func (ts *TokenService) IsAdmin(username string) bool {
+	if ts.acl == nil {
+		return false
+	}
+	// Check if user has '*' actions on ANY repository (not just catalog)
+	// This should only match actual admin accounts defined in ACL
+	perms := ts.acl.GetPermissions(username, "repository", "*")
+	for _, p := range perms {
+		if p == "*" {
+			return true
+		}
+	}
+	// Also check if they explicitly have push+pull+delete which is essentially admin
+	hasPush := false
+	hasPull := false
+	hasDelete := false
+	for _, p := range perms {
+		if p == "push" {
+			hasPush = true
+		}
+		if p == "pull" {
+			hasPull = true
+		}
+		if p == "delete" {
+			hasDelete = true
+		}
+	}
+	return hasPush && hasPull && hasDelete
+}
+
+// SetACL updates the ACL used by the TokenService
+func (ts *TokenService) SetACL(acl *ACL) {
+	ts.acl = acl
 }

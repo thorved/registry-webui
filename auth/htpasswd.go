@@ -22,8 +22,38 @@ func NewHtpasswdAuth(filePath string) (*HtpasswdAuth, error) {
 		users:    make(map[string]string),
 	}
 
-	if err := auth.loadFile(); err != nil {
-		return nil, err
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Printf("Password file not found at %s, creating with default admin user\n", filePath)
+
+		// Create directory if it doesn't exist
+		dir := strings.TrimSuffix(filePath, "/registry.password")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create auth directory: %v", err)
+		}
+
+		// Create default admin user (admin/admin)
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash default admin password: %v", err)
+		}
+
+		auth.users["admin"] = string(hashedPassword)
+
+		// Save the file with default admin user
+		if err := auth.saveFile(); err != nil {
+			return nil, fmt.Errorf("failed to create default password file: %v", err)
+		}
+
+		fmt.Printf("✓ Default admin user created (username: admin, password: admin)\n")
+		fmt.Printf("⚠ IMPORTANT: Please change the default admin password immediately!\n")
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to check password file: %v", err)
+	} else {
+		// File exists, load it
+		if err := auth.loadFile(); err != nil {
+			return nil, err
+		}
 	}
 
 	return auth, nil
