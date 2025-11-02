@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  registry:
+    image: registry:3
+    container_name: docker-registry
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - REGISTRY_AUTH=htpasswd
+      - REGISTRY_AUTH_HTPASSWD_REALM=Registry
+      - REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password
+      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+    volumes:
+      - ./auth:/auth
+      - ./data:/data
+    networks:
+      - registry-net
+
+  registry-webui:
+    build: .
+    container_name: registry-webui
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - REGISTRY_URL=http://registry:5000
+      - REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password
+      - WEB_UI_PORT=8080
+      - SESSION_SECRET=your-secret-key-change-this
+    volumes:
+      - ./auth:/auth
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - registry
+    networks:
+      - registry-net
+
+networks:
+  registry-net:
+    driver: bridge
