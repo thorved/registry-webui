@@ -289,6 +289,25 @@
         passkeyButton.classList.add('opacity-50', 'cursor-not-allowed');
         passkeyButton.title = 'Passkeys are not supported in this browser';
     }
+
+    // Auto-trigger passkey login on page load (if supported)
+    window.addEventListener('load', () => {
+        if (isWebAuthnSupported()) {
+            // Small delay to ensure page is fully rendered
+            setTimeout(async () => {
+                // Only auto-trigger if there's no error message (not a failed login redirect)
+                const hasError = {{ if .error }}true{{ else }}false{{ end }};
+                if (!hasError) {
+                    try {
+                        await performDiscoverableLogin();
+                    } catch (error) {
+                        // Silently fail for auto-trigger - user can still click button manually
+                        console.log('Auto passkey login cancelled or failed:', error.message);
+                    }
+                }
+            }, 500); // 500ms delay for better UX
+        }
+    });
 </script>
 </body>
 </html>
