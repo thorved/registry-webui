@@ -9,14 +9,13 @@ services:
       - "5000:5000"
     environment:
       - REGISTRY_AUTH=token
-      - REGISTRY_AUTH_TOKEN_REALM=http://localhost:8080/auth
+      - REGISTRY_AUTH_TOKEN_REALM=http://aithen:8080/auth
       - REGISTRY_AUTH_TOKEN_SERVICE=registry
       - REGISTRY_AUTH_TOKEN_ISSUER=registry-token-issuer
       - REGISTRY_AUTH_TOKEN_JWKS=/certs/jwks.json
       - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/data
       - REGISTRY_STORAGE_DELETE_ENABLED=true
     volumes:
-      - ./data/auth:/auth
       - ./data/certs:/certs
       - ./data/registry:/data
     networks:
