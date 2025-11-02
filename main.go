@@ -10,10 +10,10 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 
-	"registry-webui/auth"
-	"registry-webui/config"
-	"registry-webui/handlers"
-	"registry-webui/registry"
+	"aithen/auth"
+	"aithen/config"
+	"aithen/handlers"
+	"aithen/registry"
 )
 
 func main() {
@@ -135,7 +135,7 @@ func main() {
 
 	// Start server
 	port := cfg.WebUIPort
-	log.Printf("Starting Registry Web UI on port %s", port)
+	log.Printf("Starting Aithen on port %s", port)
 	log.Printf("Registry URL: %s", cfg.RegistryURL)
 	log.Printf("Token authentication endpoint: http://localhost:%s/auth", port)
 

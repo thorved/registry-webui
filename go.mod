@@ -1,4 +1,4 @@
-module registry-webui
+module aithen
 
 go 1.25.3
 

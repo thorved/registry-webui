@@ -13,24 +13,24 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o registry-webui .
+RUN CGO_ENABLED=0 GOOS=linux go build -o aithen .
 
 # Runtime stage
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates docker-cli
+RUN apk --no-cache add ca-certificates docker-cli dos2unix
 
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/registry-webui .
+COPY --from=builder /app/aithen .
 
 # Copy templates
 COPY --from=builder /app/templates ./templates
 
-# Copy entrypoint script
+# Copy entrypoint script and convert line endings
 COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN dos2unix /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Expose port
 EXPOSE 8080

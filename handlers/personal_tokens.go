@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"registry-webui/auth"
+	"aithen/auth"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

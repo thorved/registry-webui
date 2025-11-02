@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"registry-webui/auth"
-	"registry-webui/registry"
+	"aithen/auth"
+	"aithen/registry"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"aithen/auth"
 	"net/http"
-	"registry-webui/auth"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

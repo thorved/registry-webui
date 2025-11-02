@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-echo "Starting registry-webui..."
+echo "Starting aithen..."
 
 # Start the application in background
-./registry-webui &
+./aithen &
 APP_PID=$!
 
 # Wait for certificate to be generated (max 30 seconds)
@@ -24,3 +24,4 @@ fi
 
 # Wait for the application process
 wait $APP_PID
+

@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"registry-webui/auth"
-	"registry-webui/config"
-	"registry-webui/registry"
+	"aithen/auth"
+	"aithen/config"
+	"aithen/registry"
 )
 
 // Handler contains all dependencies for HTTP handlers

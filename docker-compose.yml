@@ -23,12 +23,12 @@ services:
     networks:
       - registry-net
     depends_on:
-      - registry-webui
+      - aithen
     command: ["/bin/sh", "/wait.sh"]
 
-  registry-webui:
+  aithen:
     build: .
-    container_name: registry-webui
+    container_name: aithen
     restart: always
     ports:
       - "8080:8080"

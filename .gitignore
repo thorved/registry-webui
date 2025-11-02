@@ -40,6 +40,6 @@ go.work.sum
 # Build
 dist/
 build/
-registry-webui
+aithen
 
 data/
