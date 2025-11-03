@@ -7,16 +7,16 @@
     <h4 class="text-sm font-medium text-gray-900 mb-3">Tags ({{ len .tags }})</h4>
     <div class="space-y-2">
         {{ range .tags }}
-        <div class="flex items-center justify-between bg-white rounded-md p-3 shadow-sm">
-            <div class="flex items-center space-x-3">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white rounded-md p-3 shadow-sm gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 min-w-0">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 self-start">
                     {{ . }}
                 </span>
                 <button 
                     hx-get="/api/repository/{{ $.repository }}/tag/{{ . }}"
                     hx-target="#image-details-modal"
                     hx-swap="innerHTML"
-                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                    class="text-xs text-blue-600 hover:text-blue-800 font-medium self-start">
                     View Details
                 </button>
             </div>
@@ -26,7 +26,7 @@
                 hx-confirm="Are you sure you want to delete {{ $.repository }}:{{ . }}?"
                 hx-target="closest .flex"
                 hx-swap="outerHTML"
-                class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                class="inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 w-full sm:w-auto whitespace-nowrap">
                 <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
