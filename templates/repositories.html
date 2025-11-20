@@ -10,11 +10,11 @@
 <!-- DEBUG: User Role = {{ .userRole }} -->
 <ul class="divide-y divide-gray-200">
     {{ range .repositories }}
-    <li class="hover:bg-gray-50 transition-colors" id="repo-{{ . }}">
+    <li class="hover:bg-gray-50 transition-colors" id="repo-{{ safeID . }}">
         <div class="px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="flex items-center flex-1 cursor-pointer"
                  hx-get="/api/repository/{{ . }}"
-                 hx-target="#repo-details-{{ . }}"
+                 hx-target="#repo-details-{{ safeID . }}"
                  hx-swap="innerHTML">
                 <div class="flex-shrink-0">
                     <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -44,7 +44,7 @@
                 </svg>
             </div>
         </div>
-        <div id="repo-details-{{ . }}" class="px-4 pb-4"></div>
+        <div id="repo-details-{{ safeID . }}" class="px-4 pb-4"></div>
     </li>
     {{ end }}
 </ul>

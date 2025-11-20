@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"log"
@@ -87,6 +88,7 @@ func main() {
 	// Load HTML templates with custom functions
 	funcMap := template.FuncMap{
 		"formatSize": formatSize,
+		"safeID":     safeID,
 	}
 	r.SetFuncMap(funcMap)
 	r.LoadHTMLGlob("templates/*.html")
@@ -105,7 +107,7 @@ func main() {
 	r.GET("/login", h.ShowLoginPage)
 	r.POST("/login", h.Login)
 	r.GET("/logout", h.Logout)
-	
+
 	// Passkey authentication routes (public)
 	r.GET("/auth/passkey/login/begin", h.BeginPasskeyLogin)
 	r.POST("/auth/passkey/login/finish", h.FinishPasskeyLogin)
@@ -125,7 +127,7 @@ func main() {
 
 		// Token Management
 		protected.GET("/tokens", h.ShowTokens)
-		
+
 		// Passkey Management
 		protected.GET("/passkeys", h.ShowPasskeysPage)
 
@@ -148,7 +150,7 @@ func main() {
 			api.GET("/tokens", h.ListTokens)
 			api.POST("/tokens", h.CreatePersonalToken)
 			api.DELETE("/tokens/:id", h.DeletePersonalToken)
-			
+
 			// Passkey management APIs
 			api.GET("/passkeys", h.ListPasskeys)
 			api.POST("/passkeys/register/begin", h.BeginPasskeyRegistration)
@@ -184,4 +186,12 @@ func formatSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// safeID converts a string to a safe CSS ID using base64 encoding
+func safeID(s string) string {
+	// Use URL-safe base64 encoding to preserve the original name
+	// while making it safe for use as CSS ID
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(s))
+	return encoded
 }
